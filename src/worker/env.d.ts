@@ -1,3 +1,3 @@
 interface Env {
-  ROOM: DurableObjectNamespace;
+  ROOM: DurableObjectNamespace<import('./room').Room>;
 }

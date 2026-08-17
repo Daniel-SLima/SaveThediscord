@@ -20,7 +20,7 @@ export type ServerMessage =
   | { type: 'signal'; from: string; data: Record<string, unknown> }
   | { type: 'share-started'; participantId: string }
   | { type: 'share-stopped'; participantId: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: 'room-full' | 'share-limit' | 'creator-only' | 'room-locked' | 'invalid-message' }
   | { type: 'room-ended' };
 
 const hasOnlyType = (value: Record<string, unknown>, type: ClientMessage['type']) => value.type === type;
