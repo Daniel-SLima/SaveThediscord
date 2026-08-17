@@ -7,6 +7,7 @@ import { ShareControls } from './components/ShareControls';
 import { StreamTile } from './components/StreamTile';
 import { RoomClient } from './lib/room-client';
 import { removeRemoteStream } from './lib/room-state';
+import { beginScreenShare } from './lib/share-session';
 import { PeerMesh, startCapture } from './lib/webrtc';
 
 function hashRoomId(): string | undefined {
@@ -81,12 +82,15 @@ export default function App() {
   const startShare = async () => {
     setError(undefined);
     try {
-      const stream = await startCapture('motion');
+      const stream = await beginScreenShare({
+        selfId,
+        capture: () => startCapture('motion'),
+        setLocalStream,
+        send: (message) => client.current?.send(message),
+        startMesh: (capturedStream) => mesh.current!.startShare(capturedStream, participants.filter((participant) => participant.id !== selfId).map((participant) => participant.id)),
+        stopMesh: () => mesh.current?.stopShare(),
+      });
       stream.getVideoTracks()[0]?.addEventListener('ended', () => stopShare());
-      setLocalStream(stream);
-      client.current?.send({ type: 'start-share' });
-      if (!selfId) throw new Error('Aguardando a identificação da sala antes de compartilhar.');
-      await mesh.current?.startShare(stream, participants.filter((participant) => participant.id !== selfId).map((participant) => participant.id));
     } catch (cause) {
       setError(cause instanceof Error && cause.name === 'NotAllowedError' ? 'Permissão de compartilhamento cancelada ou negada.' : cause instanceof Error ? cause.message : 'Não foi possível capturar sua tela.');
     }

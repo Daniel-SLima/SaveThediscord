@@ -54,4 +54,13 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'renegotiate' } }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'answer', sdp: 'x'.repeat(100_001) } }))).toBeNull();
   });
+
+  it('rejects oversized raw messages and unbounded ICE metadata', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'join', name: 'Ana', padding: 'x'.repeat(130_000) }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1', sdpMid: 'x'.repeat(257) } } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1', usernameFragment: 'x'.repeat(257) } } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1', sdpMLineIndex: 256 } } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1', sdpMLineIndex: 1.5 } } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1' }, padding: 'x'.repeat(110_000) } }))).toBeNull();
+  });
 });

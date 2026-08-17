@@ -28,6 +28,13 @@ export type ServerMessage =
   | { type: 'room-ended' };
 
 const hasOnlyType = (value: Record<string, unknown>, type: ClientMessage['type']) => value.type === type;
+const MAX_RAW_MESSAGE_BYTES = 128_000;
+const MAX_SIGNAL_BYTES = 105_000;
+const MAX_ICE_STRING_LENGTH = 256;
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
 
 function getTrimmedString(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
@@ -42,8 +49,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseSignalData(value: unknown): SignalData | null {
   if (!isRecord(value) || typeof value.type !== 'string') return null;
+  if (byteLength(JSON.stringify(value)) > MAX_SIGNAL_BYTES) return null;
   if ((value.type === 'offer' || value.type === 'answer') && typeof value.sdp === 'string' && value.sdp.length > 0 && value.sdp.length <= 100_000) return { type: value.type, sdp: value.sdp };
   if (value.type !== 'candidate' || !isRecord(value.candidate) || typeof value.candidate.candidate !== 'string' || value.candidate.candidate.length > 4_000) return null;
+  if (typeof value.candidate.sdpMid === 'string' && value.candidate.sdpMid.length > MAX_ICE_STRING_LENGTH) return null;
+  if (typeof value.candidate.usernameFragment === 'string' && value.candidate.usernameFragment.length > MAX_ICE_STRING_LENGTH) return null;
+  if (value.candidate.sdpMLineIndex !== undefined && value.candidate.sdpMLineIndex !== null && (!Number.isInteger(value.candidate.sdpMLineIndex) || value.candidate.sdpMLineIndex < 0 || value.candidate.sdpMLineIndex > 255)) return null;
   const candidate: SignalData = { type: 'candidate', candidate: { candidate: value.candidate.candidate } };
   if (typeof value.candidate.sdpMid === 'string' || value.candidate.sdpMid === null) candidate.candidate.sdpMid = value.candidate.sdpMid;
   if (typeof value.candidate.sdpMLineIndex === 'number' || value.candidate.sdpMLineIndex === null) candidate.candidate.sdpMLineIndex = value.candidate.sdpMLineIndex;
@@ -53,6 +64,8 @@ function parseSignalData(value: unknown): SignalData | null {
 
 export function parseClientMessage(raw: string): ClientMessage | null {
   let value: unknown;
+
+  if (byteLength(raw) > MAX_RAW_MESSAGE_BYTES) return null;
 
   try {
     value = JSON.parse(raw);
