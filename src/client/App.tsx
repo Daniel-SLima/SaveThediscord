@@ -28,6 +28,7 @@ export default function App() {
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const client = useRef<RoomClient | undefined>(undefined);
   const mesh = useRef<PeerMesh | undefined>(undefined);
+  const shareSession = useRef(0);
   if (!client.current) client.current = new RoomClient();
   if (!mesh.current) {
     mesh.current = new PeerMesh((to, data) => client.current?.send({ type: 'signal', to, data }));
@@ -42,9 +43,11 @@ export default function App() {
   useEffect(() => {
     if (!roomId || !name) return;
     const roomClient = client.current!;
+    shareSession.current += 1;
     setSelfId(undefined);
     const unsubscribe = roomClient.onMessage((message) => handleMessage(message));
     const unsubscribeClose = roomClient.onClose(() => {
+      shareSession.current += 1;
       mesh.current?.stopShare();
       setSelfId(undefined);
       setLocalStream(undefined);
@@ -88,9 +91,11 @@ export default function App() {
   const join = (id: string, nickname: string) => setName(nickname);
   const startShare = async () => {
     setError(undefined);
+    const session = shareSession.current;
     try {
       const stream = await beginScreenShare({
         selfId,
+        isCurrent: () => shareSession.current === session,
         capture: () => startCapture('motion'),
         setLocalStream,
         requestStartShare: () => client.current?.startShare() ?? Promise.reject(new Error('A conexão com a sala foi encerrada.')),

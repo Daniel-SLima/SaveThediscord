@@ -69,4 +69,31 @@ describe('RoomClient', () => {
     expect(client.selfId).toBeUndefined();
     await expect(pending).rejects.toThrow(/encerrada/i);
   });
+
+  it('rejects a pending share authorization immediately on close and permits a new one after reconnecting', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const client = new RoomClient({ origin: 'https://example.test' });
+    const firstConnection = client.connect('AbCdEfGhIjKlMnOpQrStUv', 'Ana');
+    const firstSocket = FakeWebSocket.instances.at(-1)!;
+    firstSocket.open();
+    await firstConnection;
+    firstSocket.message({ type: 'snapshot', selfId: 'ana', participants: [], locked: false, sharerIds: [] });
+    firstSocket.close = vi.fn();
+    const pending = client.startShare();
+    let result = 'unsettled';
+    void pending.then(() => { result = 'resolved'; }, () => { result = 'rejected'; });
+
+    client.close();
+    await Promise.resolve();
+    expect(result).toBe('rejected');
+
+    const secondConnection = client.connect('AbCdEfGhIjKlMnOpQrStUv', 'Ana');
+    const secondSocket = FakeWebSocket.instances.at(-1)!;
+    secondSocket.open();
+    await secondConnection;
+    secondSocket.message({ type: 'snapshot', selfId: 'ana-2', participants: [], locked: false, sharerIds: [] });
+    const retry = client.startShare();
+    secondSocket.message({ type: 'share-started', participantId: 'ana-2' });
+    await expect(retry).resolves.toBeUndefined();
+  });
 });

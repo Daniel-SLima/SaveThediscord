@@ -58,9 +58,10 @@ export class RoomClient {
   }
 
   close(): void {
-    this.socket?.close();
-    this.socket = undefined;
-    this.selfId = undefined;
+    const socket = this.socket;
+    if (!socket) return;
+    this.handleClose(socket);
+    socket.close();
   }
 
   private receive(raw: unknown): void {

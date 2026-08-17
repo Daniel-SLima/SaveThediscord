@@ -5,6 +5,7 @@ it('does not open the display picker before the room identifies the participant'
   const capture = vi.fn();
   await expect(beginScreenShare({
     selfId: undefined,
+    isCurrent: () => true,
     capture,
     setLocalStream: vi.fn(),
     requestStartShare: vi.fn(),
@@ -25,6 +26,7 @@ it('rolls back tracks, local state, and room share state when peer setup fails',
 
   await expect(beginScreenShare({
     selfId: 'ana',
+    isCurrent: () => true,
     capture: vi.fn().mockResolvedValue(stream),
     setLocalStream,
     requestStartShare,
@@ -45,7 +47,7 @@ it('waits for server share acceptance before opening the display picker', async 
   const requestStartShare = vi.fn(() => new Promise<void>((resolve) => { acceptShare = resolve; }));
   const capture = vi.fn().mockResolvedValue({ getTracks: () => [] } as unknown as MediaStream);
   const sharing = beginScreenShare({
-    selfId: 'ana', capture, requestStartShare, sendStopShare: vi.fn(),
+    selfId: 'ana', isCurrent: () => true, capture, requestStartShare, sendStopShare: vi.fn(),
     setLocalStream: vi.fn(), startMesh: vi.fn().mockResolvedValue(undefined), stopMesh: vi.fn(),
   });
 
@@ -54,4 +56,45 @@ it('waits for server share acceptance before opening the display picker', async 
   acceptShare();
   await sharing;
   expect(capture).toHaveBeenCalledOnce();
+});
+
+it('cancels a stale share session after the display picker resolves', async () => {
+  let resolveCapture: (stream: MediaStream) => void = () => undefined;
+  const track = { stop: vi.fn() } as unknown as MediaStreamTrack;
+  const capture = vi.fn(() => new Promise<MediaStream>((resolve) => { resolveCapture = resolve; }));
+  let current = true;
+  const setLocalStream = vi.fn();
+  const startMesh = vi.fn();
+  const sharing = beginScreenShare({
+    selfId: 'ana', capture, isCurrent: () => current,
+    requestStartShare: vi.fn().mockResolvedValue(undefined), sendStopShare: vi.fn(),
+    setLocalStream, startMesh, stopMesh: vi.fn(),
+  });
+
+  await Promise.resolve();
+  current = false;
+  resolveCapture({ getTracks: () => [track] } as unknown as MediaStream);
+
+  await expect(sharing).rejects.toThrow(/cancelado/i);
+  expect(track.stop).toHaveBeenCalledOnce();
+  expect(setLocalStream).not.toHaveBeenCalledWith(expect.anything());
+  expect(startMesh).not.toHaveBeenCalled();
+});
+
+it('cancels and rolls back when the session goes stale during peer setup', async () => {
+  const track = { stop: vi.fn() } as unknown as MediaStreamTrack;
+  let current = true;
+  const setLocalStream = vi.fn();
+  const stopMesh = vi.fn();
+  const sharing = beginScreenShare({
+    selfId: 'ana', capture: vi.fn().mockResolvedValue({ getTracks: () => [track] } as unknown as MediaStream),
+    isCurrent: () => current, requestStartShare: vi.fn().mockResolvedValue(undefined), sendStopShare: vi.fn(),
+    setLocalStream, stopMesh,
+    startMesh: vi.fn().mockImplementation(async () => { current = false; }),
+  });
+
+  await expect(sharing).rejects.toThrow(/cancelado/i);
+  expect(track.stop).toHaveBeenCalledOnce();
+  expect(stopMesh).toHaveBeenCalledOnce();
+  expect(setLocalStream).toHaveBeenLastCalledWith(undefined);
 });
