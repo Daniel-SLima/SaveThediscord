@@ -158,7 +158,7 @@ export class Room extends RuntimeDurableObject<Env> {
     };
     this.participants.set(id, participant);
     this.saveAttachment(participant);
-    this.send(socket, this.snapshot());
+    this.send(socket, this.snapshot(id));
     this.broadcast({ type: 'participant-joined', participant: this.toParticipant(participant) }, socket);
   }
 
@@ -170,7 +170,13 @@ export class Room extends RuntimeDurableObject<Env> {
 
     if (message.type === 'signal') {
       const target = this.participants.get(message.to);
-      if (target) this.send(target.socket, { type: 'signal', from: sender.id, data: message.data });
+      if (!target) return;
+      const isOffer = message.data.type === 'offer';
+      if ((isOffer && !sender.isSharing) || (!isOffer && !sender.isSharing && !target.isSharing)) {
+        this.sendError(sender.socket, 'unauthorized-signal', 'Only an active screen share can establish media signaling.');
+        return;
+      }
+      this.send(target.socket, { type: 'signal', from: sender.id, data: message.data });
       return;
     }
 
@@ -199,7 +205,7 @@ export class Room extends RuntimeDurableObject<Env> {
     if (message.type === 'lock-room') {
       this.locked = true;
       this.saveAllAttachments();
-      this.broadcast(this.snapshot());
+      this.broadcastSnapshots();
       return;
     }
 
@@ -240,13 +246,18 @@ export class Room extends RuntimeDurableObject<Env> {
     return [...this.participants.values()].filter((participant) => participant.isSharing);
   }
 
-  private snapshot(): ServerMessage {
+  private snapshot(selfId: string): ServerMessage {
     return {
       type: 'snapshot',
+      selfId,
       participants: [...this.participants.values()].map((participant) => this.toParticipant(participant)),
       locked: this.locked,
       sharerIds: this.activeSharers().map((participant) => participant.id),
     };
+  }
+
+  private broadcastSnapshots(): void {
+    for (const participant of this.participants.values()) this.send(participant.socket, this.snapshot(participant.id));
   }
 
   private toParticipant(participant: ConnectedParticipant): Participant {

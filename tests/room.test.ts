@@ -127,7 +127,7 @@ describe('Room', () => {
       code: 'creator-only',
     }));
     await room.send('creator', { type: 'lock-room' });
-    expect(room.messages('guest')).toContainEqual({ type: 'snapshot', participants: [
+    expect(room.messages('guest')).toContainEqual({ type: 'snapshot', selfId: 'guest', participants: [
       { id: 'creator', name: 'Ana' },
       { id: 'guest', name: 'Bia' },
     ], locked: true, sharerIds: [] });
@@ -148,9 +148,30 @@ describe('Room', () => {
     expect(room.messages('c')).toContainEqual({ type: 'chat', from: { id: 'a', name: 'Ana' }, text: 'Olá!' });
 
     room.clearMessages();
-    await room.send('a', { type: 'signal', to: 'b', data: { sdp: 'offer' } });
-    expect(room.messages('b')).toEqual([{ type: 'signal', from: 'a', data: { sdp: 'offer' } }]);
+    await room.send('a', { type: 'start-share' });
+    room.clearMessages();
+    await room.send('a', { type: 'signal', to: 'b', data: { type: 'offer', sdp: 'offer' } });
+    expect(room.messages('b')).toEqual([{ type: 'signal', from: 'a', data: { type: 'offer', sdp: 'offer' } }]);
     expect(room.messages('c')).toEqual([]);
+  });
+
+  it('gives every joiner its own unambiguous participant id in the snapshot', async () => {
+    const room = await createRoomHarness();
+    const messages = await room.join('ana-2', 'Ana');
+
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'snapshot', selfId: 'ana-2' }));
+  });
+
+  it('rejects media offers from participants who are not actively sharing', async () => {
+    const room = await createRoomHarness();
+    await room.join('a', 'Ana');
+    await room.join('b', 'Bia');
+    room.clearMessages();
+
+    await room.send('a', { type: 'signal', to: 'b', data: { type: 'offer', sdp: 'offer' } });
+
+    expect(room.messages('a')).toContainEqual(expect.objectContaining({ type: 'error', code: 'unauthorized-signal' }));
+    expect(room.messages('b')).toEqual([]);
   });
 
   it('announces a departure and stops that participant share on close', async () => {
@@ -208,6 +229,7 @@ describe('Room', () => {
 
     await expect(room.join('late')).resolves.toContainEqual({
       type: 'snapshot',
+      selfId: 'late',
       participants: [
         { id: 'a', name: 'a' },
         { id: 'b', name: 'b' },

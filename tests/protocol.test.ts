@@ -23,10 +23,10 @@ describe('parseClientMessage', () => {
       type: 'chat',
       text: 'Oi!',
     });
-    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { sdp: 'offer' } }))).toEqual({
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'offer', sdp: 'offer' } }))).toEqual({
       type: 'signal',
       to: 'peer-1',
-      data: { sdp: 'offer' },
+      data: { type: 'offer', sdp: 'offer' },
     });
     expect(parseClientMessage(JSON.stringify({ type: 'start-share' }))).toEqual({ type: 'start-share' });
     expect(parseClientMessage(JSON.stringify({ type: 'stop-share' }))).toEqual({ type: 'stop-share' });
@@ -41,5 +41,17 @@ describe('parseClientMessage', () => {
     expect(parseClientMessage(JSON.stringify({ type: 'chat', text: 'a'.repeat(501) }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: 'signal', data: {} }))).toBeNull();
     expect(parseClientMessage(JSON.stringify({ type: 'signal', to: '', data: {} }))).toBeNull();
+  });
+
+  it('accepts only bounded offer, answer, and ICE candidate signal payloads', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'offer', sdp: 'v=0' } }))).toEqual({
+      type: 'signal', to: 'peer-1', data: { type: 'offer', sdp: 'v=0' },
+    });
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1' } } }))).toEqual({
+      type: 'signal', to: 'peer-1', data: { type: 'candidate', candidate: { candidate: 'candidate:1' } },
+    });
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'offer' } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'renegotiate' } }))).toBeNull();
+    expect(parseClientMessage(JSON.stringify({ type: 'signal', to: 'peer-1', data: { type: 'answer', sdp: 'x'.repeat(100_001) } }))).toBeNull();
   });
 });

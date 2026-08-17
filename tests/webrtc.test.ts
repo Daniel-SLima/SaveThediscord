@@ -31,6 +31,7 @@ describe('PeerMesh', () => {
 
     await mesh.startShare(stream, ['viewer-1']);
 
+    expect(RTCPeerConnection).toHaveBeenCalledWith({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     expect(sendSignal).toHaveBeenCalledWith('viewer-1', { type: 'offer', sdp: 'offer-sdp' });
   });
 

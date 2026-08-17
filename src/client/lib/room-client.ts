@@ -5,6 +5,7 @@ type Listener = (message: ServerMessage) => void;
 export class RoomClient {
   private socket?: WebSocket;
   private readonly listeners = new Set<Listener>();
+  private readonly closeListeners = new Set<() => void>();
   private readonly origin: string;
 
   constructor(options: { origin?: string } = {}) {
@@ -25,6 +26,10 @@ export class RoomClient {
       }, { once: true });
       socket.addEventListener('error', () => reject(new Error('Não foi possível conectar à sala.')),{ once: true });
       socket.addEventListener('message', (event) => this.receive(event.data));
+      socket.addEventListener('close', () => {
+        if (this.socket === socket) this.socket = undefined;
+        this.closeListeners.forEach((listener) => listener());
+      });
     });
   }
 
@@ -33,8 +38,14 @@ export class RoomClient {
     return () => this.listeners.delete(listener);
   }
 
+  onClose(listener: () => void): () => void {
+    this.closeListeners.add(listener);
+    return () => this.closeListeners.delete(listener);
+  }
+
   send(message: ClientMessage): void {
-    this.socket?.send(JSON.stringify(message));
+    if (!this.socket || (typeof this.socket.readyState === 'number' && this.socket.readyState !== WebSocket.OPEN)) return;
+    try { this.socket.send(JSON.stringify(message)); } catch { this.closeListeners.forEach((listener) => listener()); }
   }
 
   close(): void {

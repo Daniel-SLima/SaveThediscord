@@ -1,5 +1,6 @@
+import type { SignalData } from '../../shared/protocol';
+
 export type CaptureProfile = 'motion' | 'detail';
-type SignalData = Record<string, unknown>;
 
 export async function startCapture(profile: CaptureProfile = 'motion'): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Este navegador não oferece compartilhamento de tela.');
@@ -67,7 +68,7 @@ export class PeerMesh {
   }
 
   private createPeer(participantId: string): RTCPeerConnection {
-    const peer = new RTCPeerConnection();
+    const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     peer.addEventListener('icecandidate', (event) => {
       if (event.candidate) this.sendSignal(participantId, { type: 'candidate', candidate: event.candidate.toJSON() });
     });

@@ -35,4 +35,18 @@ describe('RoomClient', () => {
     expect(socket.sent).toEqual([JSON.stringify({ type: 'join', name: 'Ana' })]);
     expect(received).toEqual(['snapshot']);
   });
+
+  it('notifies the UI when the room WebSocket closes', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const client = new RoomClient({ origin: 'https://example.test' });
+    const closed = vi.fn();
+    client.onClose(closed);
+    const connecting = client.connect('AbCdEfGhIjKlMnOpQrStUv', 'Ana');
+    const socket = FakeWebSocket.instances.at(-1)!;
+    socket.open();
+    await connecting;
+    socket.close();
+
+    expect(closed).toHaveBeenCalledOnce();
+  });
 });

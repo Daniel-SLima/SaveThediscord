@@ -1,7 +1,11 @@
+export type SignalData =
+  | { type: 'offer' | 'answer'; sdp: string }
+  | { type: 'candidate'; candidate: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null; usernameFragment?: string } };
+
 export type ClientMessage =
   | { type: 'join'; name: string }
   | { type: 'chat'; text: string }
-  | { type: 'signal'; to: string; data: Record<string, unknown> }
+  | { type: 'signal'; to: string; data: SignalData }
   | { type: 'start-share' }
   | { type: 'stop-share' }
   | { type: 'lock-room' }
@@ -13,14 +17,14 @@ export interface Participant {
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; participants: Participant[]; locked: boolean; sharerIds: string[] }
+  | { type: 'snapshot'; selfId: string; participants: Participant[]; locked: boolean; sharerIds: string[] }
   | { type: 'participant-joined'; participant: Participant }
   | { type: 'participant-left'; participantId: string }
   | { type: 'chat'; from: Participant; text: string }
-  | { type: 'signal'; from: string; data: Record<string, unknown> }
+  | { type: 'signal'; from: string; data: SignalData }
   | { type: 'share-started'; participantId: string }
   | { type: 'share-stopped'; participantId: string }
-  | { type: 'error'; message: string; code?: 'room-full' | 'share-limit' | 'creator-only' | 'room-locked' | 'room-ended' | 'invalid-message' }
+  | { type: 'error'; message: string; code?: 'room-full' | 'share-limit' | 'creator-only' | 'room-locked' | 'room-ended' | 'invalid-message' | 'unauthorized-signal' }
   | { type: 'room-ended' };
 
 const hasOnlyType = (value: Record<string, unknown>, type: ClientMessage['type']) => value.type === type;
@@ -34,6 +38,17 @@ function getTrimmedString(value: unknown, maxLength: number): string | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseSignalData(value: unknown): SignalData | null {
+  if (!isRecord(value) || typeof value.type !== 'string') return null;
+  if ((value.type === 'offer' || value.type === 'answer') && typeof value.sdp === 'string' && value.sdp.length > 0 && value.sdp.length <= 100_000) return { type: value.type, sdp: value.sdp };
+  if (value.type !== 'candidate' || !isRecord(value.candidate) || typeof value.candidate.candidate !== 'string' || value.candidate.candidate.length > 4_000) return null;
+  const candidate: SignalData = { type: 'candidate', candidate: { candidate: value.candidate.candidate } };
+  if (typeof value.candidate.sdpMid === 'string' || value.candidate.sdpMid === null) candidate.candidate.sdpMid = value.candidate.sdpMid;
+  if (typeof value.candidate.sdpMLineIndex === 'number' || value.candidate.sdpMLineIndex === null) candidate.candidate.sdpMLineIndex = value.candidate.sdpMLineIndex;
+  if (typeof value.candidate.usernameFragment === 'string') candidate.candidate.usernameFragment = value.candidate.usernameFragment;
+  return candidate;
 }
 
 export function parseClientMessage(raw: string): ClientMessage | null {
@@ -59,7 +74,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
 
   if (hasOnlyType(value, 'signal')) {
     const to = getTrimmedString(value.to, 128);
-    return to && isRecord(value.data) ? { type: 'signal', to, data: value.data } : null;
+    const data = parseSignalData(value.data);
+    return to && data ? { type: 'signal', to, data } : null;
   }
 
   if (hasOnlyType(value, 'start-share')) return { type: 'start-share' };
