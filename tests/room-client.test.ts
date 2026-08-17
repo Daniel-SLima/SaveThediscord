@@ -29,7 +29,7 @@ describe('RoomClient', () => {
     const socket = FakeWebSocket.instances.at(-1)!;
     socket.open();
     await connecting;
-    socket.message({ type: 'snapshot', participants: [], locked: false, sharerIds: [] });
+    socket.message({ type: 'snapshot', selfId: 'ana', participants: [], locked: false, sharerIds: [] });
 
     expect(socket.url).toBe('wss://example.test/api/rooms/AbCdEfGhIjKlMnOpQrStUv/ws');
     expect(socket.sent).toEqual([JSON.stringify({ type: 'join', name: 'Ana' })]);
@@ -48,5 +48,25 @@ describe('RoomClient', () => {
     socket.close();
 
     expect(closed).toHaveBeenCalledOnce();
+  });
+
+  it('waits for the server share acknowledgement and clears identity on close', async () => {
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+    const client = new RoomClient({ origin: 'https://example.test' });
+    const connecting = client.connect('AbCdEfGhIjKlMnOpQrStUv', 'Ana');
+    const socket = FakeWebSocket.instances.at(-1)!;
+    socket.open();
+    await connecting;
+    socket.message({ type: 'snapshot', selfId: 'ana', participants: [], locked: false, sharerIds: [] });
+
+    const accepted = client.startShare();
+    expect(socket.sent).toContain(JSON.stringify({ type: 'start-share' }));
+    socket.message({ type: 'share-started', participantId: 'ana' });
+    await expect(accepted).resolves.toBeUndefined();
+
+    const pending = client.startShare();
+    socket.close();
+    expect(client.selfId).toBeUndefined();
+    await expect(pending).rejects.toThrow(/encerrada/i);
   });
 });

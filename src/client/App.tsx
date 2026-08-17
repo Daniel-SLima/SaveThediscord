@@ -42,8 +42,15 @@ export default function App() {
   useEffect(() => {
     if (!roomId || !name) return;
     const roomClient = client.current!;
+    setSelfId(undefined);
     const unsubscribe = roomClient.onMessage((message) => handleMessage(message));
-    const unsubscribeClose = roomClient.onClose(() => { setDisconnected(true); setError('A conexão com a sala foi encerrada.'); });
+    const unsubscribeClose = roomClient.onClose(() => {
+      mesh.current?.stopShare();
+      setSelfId(undefined);
+      setLocalStream(undefined);
+      setDisconnected(true);
+      setError('A conexão com a sala foi encerrada.');
+    });
     roomClient.connect(roomId, name).then(() => setDisconnected(false)).catch((cause: unknown) => { setDisconnected(true); setError(cause instanceof Error ? cause.message : 'A conexão foi interrompida.'); });
     return () => { unsubscribe(); unsubscribeClose(); roomClient.close(); };
   }, [roomId, name, connectionAttempt]);
@@ -86,7 +93,8 @@ export default function App() {
         selfId,
         capture: () => startCapture('motion'),
         setLocalStream,
-        send: (message) => client.current?.send(message),
+        requestStartShare: () => client.current?.startShare() ?? Promise.reject(new Error('A conexão com a sala foi encerrada.')),
+        sendStopShare: () => client.current?.send({ type: 'stop-share' }),
         startMesh: (capturedStream) => mesh.current!.startShare(capturedStream, participants.filter((participant) => participant.id !== selfId).map((participant) => participant.id)),
         stopMesh: () => mesh.current?.stopShare(),
       });
@@ -99,5 +107,5 @@ export default function App() {
 
   if (!roomId) return <Lobby onCreate={create} onJoin={join} />;
   if (!name) return <Lobby roomId={roomId} onCreate={create} onJoin={join} />;
-  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><button onClick={() => navigator.clipboard?.writeText(window.location.href).catch(() => setError('Não foi possível copiar o link.'))}>Copiar link</button></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} onStart={startShare} onStop={stopShare} />{localStream && <p className="local-note">Você está compartilhando. Os convidados recebem seu vídeo diretamente.</p>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
+  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><button onClick={() => navigator.clipboard?.writeText(window.location.href).catch(() => setError('Não foi possível copiar o link.'))}>Copiar link</button></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} disabled={!selfId || disconnected} onStart={startShare} onStop={stopShare} />{localStream && <p className="local-note">Você está compartilhando. Os convidados recebem seu vídeo diretamente.</p>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
 }
