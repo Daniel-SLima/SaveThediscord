@@ -52,7 +52,7 @@ async function createRoomHarness() {
   return {
     async join(id: string, name = id): Promise<SentMessage[]> {
       const socket = new FakeSocket();
-      socket.serializeAttachment({ id, name: '', isCreator: false, isSharing: false, locked: false });
+      socket.serializeAttachment({ id, name: '', isCreator: false, isSharing: false, locked: false, ended: false });
       context.sockets.push(socket);
       participants.set(id, socket);
       await room.webSocketMessage(socket as never, JSON.stringify({ type: 'join', name }));
@@ -130,7 +130,7 @@ describe('Room', () => {
     expect(room.messages('guest')).toContainEqual({ type: 'snapshot', participants: [
       { id: 'creator', name: 'Ana' },
       { id: 'guest', name: 'Bia' },
-    ], locked: true, sharerId: null });
+    ], locked: true, sharerIds: [] });
 
     await room.send('creator', { type: 'end-room' });
     expect(room.messages('guest')).toContainEqual({ type: 'room-ended' });
@@ -179,6 +179,43 @@ describe('Room', () => {
       type: 'error',
       code: 'room-locked',
     }));
+  });
+
+  it('ends the room so members cannot act and later joins are rejected', async () => {
+    const room = await createRoomHarness();
+    await room.join('creator');
+    await room.join('guest');
+    room.clearMessages();
+
+    await room.send('creator', { type: 'end-room' });
+    expect(room.messages('guest')).toEqual([{ type: 'room-ended' }]);
+    await expect(room.send('guest', { type: 'chat', text: 'still here?' })).resolves.toContainEqual(expect.objectContaining({
+      type: 'error',
+      code: 'room-ended',
+    }));
+    await expect(room.join('late')).resolves.toContainEqual(expect.objectContaining({
+      type: 'error',
+      code: 'room-ended',
+    }));
+  });
+
+  it('includes every active sharer in a late joiner snapshot', async () => {
+    const room = await createRoomHarness();
+    await room.join('a');
+    await room.join('b');
+    await room.send('a', { type: 'start-share' });
+    await room.send('b', { type: 'start-share' });
+
+    await expect(room.join('late')).resolves.toContainEqual({
+      type: 'snapshot',
+      participants: [
+        { id: 'a', name: 'a' },
+        { id: 'b', name: 'b' },
+        { id: 'late', name: 'late' },
+      ],
+      locked: false,
+      sharerIds: ['a', 'b'],
+    });
   });
 });
 

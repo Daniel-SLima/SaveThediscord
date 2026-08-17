@@ -13,14 +13,14 @@ export interface Participant {
 }
 
 export type ServerMessage =
-  | { type: 'snapshot'; participants: Participant[]; locked: boolean; sharerId: string | null }
+  | { type: 'snapshot'; participants: Participant[]; locked: boolean; sharerIds: string[] }
   | { type: 'participant-joined'; participant: Participant }
   | { type: 'participant-left'; participantId: string }
   | { type: 'chat'; from: Participant; text: string }
   | { type: 'signal'; from: string; data: Record<string, unknown> }
   | { type: 'share-started'; participantId: string }
   | { type: 'share-stopped'; participantId: string }
-  | { type: 'error'; message: string; code?: 'room-full' | 'share-limit' | 'creator-only' | 'room-locked' | 'invalid-message' }
+  | { type: 'error'; message: string; code?: 'room-full' | 'share-limit' | 'creator-only' | 'room-locked' | 'room-ended' | 'invalid-message' }
   | { type: 'room-ended' };
 
 const hasOnlyType = (value: Record<string, unknown>, type: ClientMessage['type']) => value.type === type;

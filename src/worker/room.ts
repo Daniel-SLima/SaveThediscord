@@ -23,6 +23,7 @@ interface SocketAttachment {
   isCreator: boolean;
   isSharing: boolean;
   locked: boolean;
+  ended: boolean;
 }
 
 interface ConnectedParticipant extends Participant, SocketAttachment {
@@ -37,12 +38,14 @@ function isSocketAttachment(value: unknown): value is SocketAttachment {
     && typeof attachment.name === 'string'
     && typeof attachment.isCreator === 'boolean'
     && typeof attachment.isSharing === 'boolean'
-    && typeof attachment.locked === 'boolean';
+    && typeof attachment.locked === 'boolean'
+    && typeof attachment.ended === 'boolean';
 }
 
 export class Room extends RuntimeDurableObject<Env> {
   private readonly participants = new Map<string, ConnectedParticipant>();
   private locked = false;
+  private ended = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -52,6 +55,7 @@ export class Room extends RuntimeDurableObject<Env> {
       if (!isSocketAttachment(attachment)) continue;
       this.participants.set(attachment.id, { ...attachment, socket });
       this.locked ||= attachment.locked;
+      this.ended ||= attachment.ended;
     }
   }
 
@@ -79,6 +83,7 @@ export class Room extends RuntimeDurableObject<Env> {
       isCreator: false,
       isSharing: false,
       locked: this.locked,
+      ended: this.ended,
     } satisfies SocketAttachment);
 
     return new Response(null, { status: 101, webSocket: client });
@@ -107,6 +112,11 @@ export class Room extends RuntimeDurableObject<Env> {
       return;
     }
 
+    if (this.ended) {
+      this.sendError(socket, 'room-ended', 'This room has ended.');
+      return;
+    }
+
     this.handleMessage(sender, parsed);
   }
 
@@ -120,6 +130,11 @@ export class Room extends RuntimeDurableObject<Env> {
 
   private join(socket: WebSocket, name: string): void {
     if (this.participantFor(socket)) return;
+
+    if (this.ended) {
+      this.sendError(socket, 'room-ended', 'This room has ended.');
+      return;
+    }
 
     if (this.locked) {
       this.sendError(socket, 'room-locked', 'This room is locked.');
@@ -138,6 +153,7 @@ export class Room extends RuntimeDurableObject<Env> {
       isCreator: this.participants.size === 0,
       isSharing: false,
       locked: this.locked,
+      ended: this.ended,
       socket,
     };
     this.participants.set(id, participant);
@@ -187,6 +203,8 @@ export class Room extends RuntimeDurableObject<Env> {
       return;
     }
 
+    this.ended = true;
+    this.saveAllAttachments();
     this.broadcast({ type: 'room-ended' });
   }
 
@@ -227,7 +245,7 @@ export class Room extends RuntimeDurableObject<Env> {
       type: 'snapshot',
       participants: [...this.participants.values()].map((participant) => this.toParticipant(participant)),
       locked: this.locked,
-      sharerId: this.activeSharers()[0]?.id ?? null,
+      sharerIds: this.activeSharers().map((participant) => participant.id),
     };
   }
 
@@ -242,6 +260,7 @@ export class Room extends RuntimeDurableObject<Env> {
       isCreator: participant.isCreator,
       isSharing: participant.isSharing,
       locked: this.locked,
+      ended: this.ended,
     } satisfies SocketAttachment);
   }
 
