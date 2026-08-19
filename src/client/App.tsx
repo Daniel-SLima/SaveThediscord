@@ -26,6 +26,7 @@ export default function App() {
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [selfId, setSelfId] = useState<string>();
+  const [activeSharerId, setActiveSharerId] = useState<string>();
   const [error, setError] = useState<string>();
   const [disconnected, setDisconnected] = useState(false);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
@@ -62,7 +63,7 @@ export default function App() {
   }, [roomId, name, connectionAttempt]);
 
   const handleMessage = (message: ServerMessage) => {
-    if (message.type === 'snapshot') { setSelfId(message.selfId); setParticipants(message.participants); return; }
+    if (message.type === 'snapshot') { setSelfId(message.selfId); setParticipants(message.participants); setActiveSharerId(message.sharerIds[0]); return; }
     if (message.type === 'participant-joined') {
       setParticipants((current) => [...current, message.participant]);
       if (localStream) void mesh.current?.addViewer(message.participant.id);
@@ -70,16 +71,19 @@ export default function App() {
     }
     if (message.type === 'participant-left') {
       setParticipants((current) => current.filter((participant) => participant.id !== message.participantId));
+      setActiveSharerId((current) => current === message.participantId ? undefined : current);
       mesh.current?.closePeer(message.participantId);
       setRemoteStreams((current) => removeRemoteStream(current, message.participantId));
       return;
     }
     if (message.type === 'share-stopped') {
+      setActiveSharerId((current) => current === message.participantId ? undefined : current);
       mesh.current?.closePeer(message.participantId);
       setRemoteStreams((current) => removeRemoteStream(current, message.participantId));
       if (message.participantId === selfId) setLocalStream(undefined);
       return;
     }
+    if (message.type === 'share-started') { setActiveSharerId(message.participantId); return; }
     if (message.type === 'chat') { setMessages((current) => [...current, { id: `${Date.now()}-${current.length}`, author: message.from.name, text: message.text }]); return; }
     if (message.type === 'signal') { void mesh.current?.handleSignal(message.from, message.data).catch(() => setError('Não foi possível estabelecer a conexão direta de mídia. Verifique permissões e rede.')); return; }
     if (message.type === 'error') setError(message.message);
@@ -115,5 +119,7 @@ export default function App() {
 
   if (!roomId) return <Lobby onCreate={create} onJoin={join} />;
   if (!name) return <Lobby roomId={roomId} onCreate={create} onJoin={join} />;
-  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><CopyLinkButton url={window.location.href} onError={setError} /></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} disabled={!selfId || disconnected} onStart={startShare} onStop={stopShare} />{localStream && <><AudienceStatus totalParticipants={participants.length} /><LocalPreview stream={localStream} /></>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : !localStream && <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
+  const activeSharer = participants.find((participant) => participant.id === activeSharerId);
+  const blockedBy = !localStream && activeSharerId !== selfId ? activeSharer?.name : undefined;
+  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><CopyLinkButton url={window.location.href} onError={setError} /></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} disabled={!selfId || disconnected} blockedBy={blockedBy} onStart={startShare} onStop={stopShare} />{localStream && <><AudienceStatus totalParticipants={participants.length} /><LocalPreview stream={localStream} /></>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : !localStream && <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
 }

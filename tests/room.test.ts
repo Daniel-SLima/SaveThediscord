@@ -100,7 +100,7 @@ describe('Room', () => {
     await expect(room.join('overflow')).resolves.toContainEqual(expect.objectContaining({ type: 'error', code: 'room-full' }));
   });
 
-  it('allows exactly two active shares', async () => {
+  it('allows only one active share', async () => {
     const room = await createRoomHarness();
     await room.join('a');
     await room.join('b');
@@ -108,9 +108,7 @@ describe('Room', () => {
     room.clearMessages();
 
     await room.send('a', { type: 'start-share' });
-    await room.send('b', { type: 'start-share' });
-
-    await expect(room.send('c', { type: 'start-share' })).resolves.toContainEqual(expect.objectContaining({
+    await expect(room.send('b', { type: 'start-share' })).resolves.toContainEqual(expect.objectContaining({
       type: 'error',
       code: 'share-limit',
     }));
@@ -220,12 +218,11 @@ describe('Room', () => {
     }));
   });
 
-  it('includes every active sharer in a late joiner snapshot', async () => {
+  it('includes the active sharer in a late joiner snapshot', async () => {
     const room = await createRoomHarness();
     await room.join('a');
     await room.join('b');
     await room.send('a', { type: 'start-share' });
-    await room.send('b', { type: 'start-share' });
 
     await expect(room.join('late')).resolves.toContainEqual({
       type: 'snapshot',
@@ -236,7 +233,7 @@ describe('Room', () => {
         { id: 'late', name: 'late' },
       ],
       locked: false,
-      sharerIds: ['a', 'b'],
+      sharerIds: ['a'],
     });
   });
 });

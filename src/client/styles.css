@@ -25,7 +25,9 @@ input { width: 100%; border: 1px solid #52688e; border-radius: .5rem; padding: .
 .stream-toolbar label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
 .stream-toolbar input { width: 6rem; padding: 0; }
 .stream-loading { position: absolute; top: 50%; left: 50%; z-index: 1; margin: 0; transform: translate(-50%, -50%); padding: .65rem .9rem; border-radius: .5rem; background: #07101fdd; color: #ecf2ff; }
+.cinema-notice { position: absolute; top: 1rem; left: 50%; z-index: 3; margin: 0; transform: translateX(-50%); padding: .5rem .75rem; border-radius: .45rem; background: #07101fdd; color: #ecf2ff; font-size: .85rem; }
 .stream-tile.fullscreen-active, .stream-tile:fullscreen { width: 100vw; height: 100vh; display: grid; place-items: center; background: #000; }
+.stream-tile.cinema-mode { position: fixed; inset: 0; z-index: 10; }
 .stream-tile.fullscreen-active video, .stream-tile:fullscreen video { width: 100%; height: 100%; max-height: none; object-fit: contain; }
 .stream-tile.fullscreen-active .stream-toolbar, .stream-tile:fullscreen .stream-toolbar { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; padding: 1.25rem; background: linear-gradient(transparent, #000d 42%); }
 .stream-tile.fullscreen-active .stream-toolbar.hidden, .stream-tile:fullscreen .stream-toolbar.hidden { opacity: 0; pointer-events: none; }

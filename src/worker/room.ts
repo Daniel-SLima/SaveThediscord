@@ -2,7 +2,7 @@ import { isValidRoomId } from '../shared/room-id';
 import { parseClientMessage, type ClientMessage, type Participant, type ServerMessage } from '../shared/protocol';
 
 const MAX_PARTICIPANTS = 10;
-const MAX_SHARERS = 2;
+const MAX_SHARERS = 1;
 
 class DurableObjectBase<Environment> {
   protected ctx: DurableObjectState;
@@ -183,7 +183,7 @@ export class Room extends RuntimeDurableObject<Env> {
     if (message.type === 'start-share') {
       if (sender.isSharing) return;
       if (this.activeSharers().length >= MAX_SHARERS) {
-        this.sendError(sender.socket, 'share-limit', 'Only two participants can share at once.');
+        this.sendError(sender.socket, 'share-limit', 'Only one participant can share at once.');
         return;
       }
       sender.isSharing = true;

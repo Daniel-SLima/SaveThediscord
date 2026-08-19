@@ -19,3 +19,10 @@ it('disables sharing until the room connection identifies the participant', () =
   fireEvent.click(button);
   expect(onStart).not.toHaveBeenCalled();
 });
+
+it('blocks a second broadcaster while naming the person already sharing', () => {
+  render(<ShareControls onStart={vi.fn()} sharing={false} blockedBy="Daniel" />);
+  const button = screen.getByRole('button', { name: /Daniel está compartilhando/i });
+  expect(button).toBeDisabled();
+  expect(screen.getByText(/aguarde Daniel parar o compartilhamento/i)).toBeVisible();
+});
