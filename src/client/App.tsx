@@ -33,6 +33,9 @@ export default function App() {
   const client = useRef<RoomClient | undefined>(undefined);
   const mesh = useRef<PeerMesh | undefined>(undefined);
   const shareSession = useRef(0);
+  const localStreamRef = useRef<MediaStream>();
+  const selfIdRef = useRef<string>();
+  const participantsRef = useRef<Participant[]>([]);
   if (!client.current) client.current = new RoomClient();
   if (!mesh.current) {
     mesh.current = new PeerMesh((to, data) => client.current?.send({ type: 'signal', to, data }));
@@ -53,7 +56,9 @@ export default function App() {
     const unsubscribeClose = roomClient.onClose(() => {
       shareSession.current += 1;
       mesh.current?.stopShare();
+      selfIdRef.current = undefined;
       setSelfId(undefined);
+      localStreamRef.current = undefined;
       setLocalStream(undefined);
       setDisconnected(true);
       setError('A conexão com a sala foi encerrada.');
@@ -63,14 +68,16 @@ export default function App() {
   }, [roomId, name, connectionAttempt]);
 
   const handleMessage = (message: ServerMessage) => {
-    if (message.type === 'snapshot') { setSelfId(message.selfId); setParticipants(message.participants); setActiveSharerId(message.sharerIds[0]); return; }
+    if (message.type === 'snapshot') { selfIdRef.current = message.selfId; setSelfId(message.selfId); participantsRef.current = message.participants; setParticipants(message.participants); setActiveSharerId(message.sharerIds[0]); return; }
     if (message.type === 'participant-joined') {
-      setParticipants((current) => [...current, message.participant]);
-      if (localStream) void mesh.current?.addViewer(message.participant.id);
+      participantsRef.current = [...participantsRef.current, message.participant];
+      setParticipants(participantsRef.current);
+      if (localStreamRef.current) void mesh.current?.addViewer(message.participant.id);
       return;
     }
     if (message.type === 'participant-left') {
-      setParticipants((current) => current.filter((participant) => participant.id !== message.participantId));
+      participantsRef.current = participantsRef.current.filter((participant) => participant.id !== message.participantId);
+      setParticipants(participantsRef.current);
       setActiveSharerId((current) => current === message.participantId ? undefined : current);
       mesh.current?.closePeer(message.participantId);
       setRemoteStreams((current) => removeRemoteStream(current, message.participantId));
@@ -80,7 +87,7 @@ export default function App() {
       setActiveSharerId((current) => current === message.participantId ? undefined : current);
       mesh.current?.closePeer(message.participantId);
       setRemoteStreams((current) => removeRemoteStream(current, message.participantId));
-      if (message.participantId === selfId) setLocalStream(undefined);
+      if (message.participantId === selfIdRef.current) { localStreamRef.current = undefined; setLocalStream(undefined); }
       return;
     }
     if (message.type === 'share-started') { setActiveSharerId(message.participantId); return; }
@@ -96,6 +103,7 @@ export default function App() {
     setRoomId(id);
   };
   const join = (id: string, nickname: string) => setName(nickname);
+  const setCurrentLocalStream = (stream: MediaStream | undefined) => { localStreamRef.current = stream; setLocalStream(stream); };
   const startShare = async () => {
     setError(undefined);
     const session = shareSession.current;
@@ -104,10 +112,10 @@ export default function App() {
         selfId,
         isCurrent: () => shareSession.current === session,
         capture: () => startCapture('motion'),
-        setLocalStream,
+        setLocalStream: setCurrentLocalStream,
         requestStartShare: () => client.current?.startShare() ?? Promise.reject(new Error('A conexão com a sala foi encerrada.')),
         sendStopShare: () => client.current?.send({ type: 'stop-share' }),
-        startMesh: (capturedStream) => mesh.current!.startShare(capturedStream, participants.filter((participant) => participant.id !== selfId).map((participant) => participant.id)),
+        startMesh: (capturedStream) => mesh.current!.startShare(capturedStream, participantsRef.current.filter((participant) => participant.id !== selfIdRef.current).map((participant) => participant.id)),
         stopMesh: () => mesh.current?.stopShare(),
       });
       stream.getVideoTracks()[0]?.addEventListener('ended', () => stopShare());
@@ -115,7 +123,7 @@ export default function App() {
       setError(cause instanceof Error && cause.name === 'NotAllowedError' ? 'Permissão de compartilhamento cancelada ou negada.' : cause instanceof Error ? cause.message : 'Não foi possível capturar sua tela.');
     }
   };
-  const stopShare = () => { mesh.current?.stopShare(); setLocalStream(undefined); client.current?.send({ type: 'stop-share' }); };
+  const stopShare = () => { mesh.current?.stopShare(); setCurrentLocalStream(undefined); client.current?.send({ type: 'stop-share' }); };
 
   if (!roomId) return <Lobby onCreate={create} onJoin={join} />;
   if (!name) return <Lobby roomId={roomId} onCreate={create} onJoin={join} />;

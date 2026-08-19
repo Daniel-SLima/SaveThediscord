@@ -22,9 +22,20 @@ it('uses an immersive fullscreen mode and displays a loading state while the liv
 
   const video = screen.getByLabelText(/transmissão de Ana/i);
   fireEvent.waiting(video);
-  expect(screen.getByRole('status')).toHaveTextContent('Conexão instável — aguardando o vídeo ao vivo');
+  expect(screen.getByRole('status')).toHaveTextContent('Reconectando vídeo…');
   fireEvent.playing(video);
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+
+it('uses icon-only fullscreen and audio controls with accessible labels', () => {
+  render(<StreamTile stream={{} as MediaStream} name="Ana" />);
+  const fullscreen = screen.getByRole('button', { name: 'Tela cheia' });
+  const audio = screen.getByRole('button', { name: 'Silenciar Ana' });
+
+  expect(fullscreen).toHaveAttribute('title', 'Tela cheia');
+  expect(audio).toHaveAttribute('title', 'Silenciar');
+  expect(fullscreen).toHaveTextContent('');
+  expect(audio).toHaveTextContent('');
 });
 
 it('hides fullscreen controls after a short period without interaction', async () => {
