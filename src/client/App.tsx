@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createRoomId, isValidRoomId } from '../shared/room-id';
 import type { Participant, ServerMessage } from '../shared/protocol';
 import { ChatPanel, type ChatLine } from './components/ChatPanel';
+import { AudienceStatus } from './components/AudienceStatus';
+import { CopyLinkButton } from './components/CopyLinkButton';
 import { Lobby } from './components/Lobby';
+import { LocalPreview } from './components/LocalPreview';
 import { ShareControls } from './components/ShareControls';
 import { StreamTile } from './components/StreamTile';
 import { RoomClient } from './lib/room-client';
@@ -112,5 +115,5 @@ export default function App() {
 
   if (!roomId) return <Lobby onCreate={create} onJoin={join} />;
   if (!name) return <Lobby roomId={roomId} onCreate={create} onJoin={join} />;
-  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><button onClick={() => navigator.clipboard?.writeText(window.location.href).catch(() => setError('Não foi possível copiar o link.'))}>Copiar link</button></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} disabled={!selfId || disconnected} onStart={startShare} onStop={stopShare} />{localStream && <p className="local-note">Você está compartilhando. Os convidados recebem seu vídeo diretamente.</p>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
+  return <main className="room"><header><div><p className="eyebrow">SALA TEMPORÁRIA</p><h1>Compartilhe sua tela</h1><p>{participants.length} {participants.length === 1 ? 'pessoa na sala' : 'pessoas na sala'}</p></div><CopyLinkButton url={window.location.href} onError={setError} /></header>{error && <p className="error" role="alert">{error}</p>}{disconnected && <button onClick={() => { setError(undefined); setDisconnected(false); setConnectionAttempt((value) => value + 1); }}>Reconectar</button>}<div className="room-layout"><section className="stage"><ShareControls sharing={Boolean(localStream)} disabled={!selfId || disconnected} onStart={startShare} onStop={stopShare} />{localStream && <><AudienceStatus totalParticipants={participants.length} /><LocalPreview stream={localStream} /></>}{remoteStreams.size ? [...remoteStreams.entries()].map(([id, stream]) => <StreamTile key={id} stream={stream} name={participants.find((participant) => participant.id === id)?.name ?? 'Convidado'} />) : !localStream && <div className="empty-stream">Aguardando alguém compartilhar uma tela.</div>}</section><ChatPanel messages={messages} onSend={(text) => client.current?.send({ type: 'chat', text })} /></div></main>;
 }

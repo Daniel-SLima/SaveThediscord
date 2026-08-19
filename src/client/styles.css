@@ -16,6 +16,7 @@ input { width: 100%; border: 1px solid #52688e; border-radius: .5rem; padding: .
 .stage, .chat-panel { border: 1px solid #31466d; border-radius: .85rem; background: #10192b; overflow: hidden; }
 .share-controls { padding: 1rem; background: #13213b; }
 .share-controls p, .local-note { color: #cbd8ee; font-size: .9rem; line-height: 1.45; }
+.audience-status { margin: 0; padding: .7rem 1rem; color: #cbd8ee; background: #0f1a2f; font-size: .9rem; }
 .empty-stream { min-height: 28rem; display: grid; place-items: center; color: #9cb0d3; }
 .stream-tile { background: #03060c; }
 .stream-tile video { display: block; width: 100%; max-height: 70vh; background: #000; }
@@ -23,6 +24,7 @@ input { width: 100%; border: 1px solid #52688e; border-radius: .5rem; padding: .
 .stream-toolbar span { margin-right: auto; font-weight: 700; }
 .stream-toolbar label { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
 .stream-toolbar input { width: 6rem; padding: 0; }
+.stream-status { font-size: .82rem; }.stream-status.ready { color: #92f0ba; }.stream-status.warning { color: #ffd27a; }
 .chat-panel { min-height: 38rem; display: flex; flex-direction: column; padding: 1rem; }
 .chat-panel h2 { margin: 0; }.messages { flex: 1; overflow: auto; }.messages p { line-height: 1.35; overflow-wrap: anywhere; }.chat-panel form { margin-top: auto; }
 .error { margin: 0 0 1rem; padding: .85rem 1rem; border: 1px solid #ff7c83; border-radius: .55rem; color: #ffe1e2; background: #4a1721; }
