@@ -19,8 +19,12 @@ describe('screen capture', () => {
 describe('PeerMesh', () => {
   it('sends an offer directly to each viewer when sharing starts', async () => {
     const sendSignal = vi.fn();
+    const sender = {
+      getParameters: vi.fn(() => ({ encodings: [{}] })),
+      setParameters: vi.fn().mockResolvedValue(undefined),
+    };
     const peer = Object.assign(new EventTarget(), {
-      addTrack: vi.fn(),
+      addTrack: vi.fn(() => sender),
       createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'offer-sdp' }),
       setLocalDescription: vi.fn().mockResolvedValue(undefined),
       close: vi.fn(),
@@ -33,6 +37,10 @@ describe('PeerMesh', () => {
 
     expect(RTCPeerConnection).toHaveBeenCalledWith({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
     expect(sendSignal).toHaveBeenCalledWith('viewer-1', { type: 'offer', sdp: 'offer-sdp' });
+    expect(sender.setParameters).toHaveBeenCalledWith({
+      encodings: [{ maxBitrate: 15_000_000, maxFramerate: 60, scaleResolutionDownBy: 1 }],
+      degradationPreference: 'maintain-resolution',
+    });
   });
 
   it('reports a failed direct peer connection', async () => {

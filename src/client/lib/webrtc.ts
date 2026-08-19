@@ -33,7 +33,8 @@ export class PeerMesh {
   async addViewer(viewerId: string): Promise<void> {
     if (!this.stream || this.peers.has(viewerId)) return;
     const peer = this.createPeer(viewerId);
-    this.stream.getTracks().forEach((track) => peer.addTrack(track, this.stream!));
+    const senders = this.stream.getTracks().map((track) => ({ track, sender: peer.addTrack(track, this.stream!) }));
+    await Promise.all(senders.filter(({ track }) => track.kind === 'video').map(({ sender }) => this.prioritizeVideoQuality(sender)));
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     this.sendSignal(viewerId, { type: offer.type, sdp: offer.sdp ?? '' });
@@ -81,5 +82,22 @@ export class PeerMesh {
     });
     this.peers.set(participantId, peer);
     return peer;
+  }
+
+  private async prioritizeVideoQuality(sender: RTCRtpSender): Promise<void> {
+    try {
+      const parameters = sender.getParameters();
+      const encodings = parameters.encodings?.length ? parameters.encodings : [{}];
+      parameters.encodings = encodings.map((encoding) => ({
+        ...encoding,
+        maxBitrate: 15_000_000,
+        maxFramerate: 60,
+        scaleResolutionDownBy: 1,
+      }));
+      parameters.degradationPreference = 'maintain-resolution';
+      await sender.setParameters(parameters);
+    } catch {
+      // Alguns navegadores não aceitam todos esses controles; a chamada WebRTC continua funcional.
+    }
   }
 }
